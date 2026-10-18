@@ -46,6 +46,8 @@ object ControllerPrefs {
         val steamButton: Boolean,
         val qamButton: Boolean,
         val keyboardButton: Boolean,
+        val selectSteam: Boolean,
+        val joyConVr: Boolean,
         val snap: Boolean,
         val customLayout: Boolean,
         val mapping: Map<String, String>,
@@ -65,6 +67,8 @@ object ControllerPrefs {
             steamButton = p.getBoolean("steamButton", true),
             qamButton = p.getBoolean("qamButton", true),
             keyboardButton = p.getBoolean("keyboardButton", true),
+            selectSteam = p.getBoolean("selectSteam", false),
+            joyConVr = joyConVr(context),
             snap = p.getBoolean("snap", true),
             customLayout = p.all.keys.any { it.startsWith("layout.") },
             mapping = mappable.associate { (id, _) -> id to target(context, id) },
@@ -121,6 +125,16 @@ object ControllerPrefs {
         prefs(context).edit().putBoolean("keyboardButton", on).apply()
     }
 
+    fun setSelectSteam(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("selectSteam", on).apply()
+    }
+
+    fun joyConVr(context: Context): Boolean = prefs(context).getBoolean("joyConVr", true)
+
+    fun setJoyConVr(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("joyConVr", on).apply()
+    }
+
     fun setSnap(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean("snap", on).apply()
     }
@@ -144,7 +158,6 @@ object ControllerPrefs {
     }
 
     fun resetAll(context: Context) {
-        // On older Android versions clear() does not notify listeners; restore rumble explicitly.
         prefs(context).edit().clear().putBoolean("rumble", true).apply()
     }
 
