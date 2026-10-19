@@ -91,6 +91,8 @@ int main(void) {
 
 TOUCH_DRIVER = r'''
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 int bl_venc_open(const char *path, int flags);
@@ -110,7 +112,16 @@ int main(void) {
     XTestFakeMotionEvent(NULL, 0, 640, 0, 0);
     XTestFakeButtonEvent(NULL, 3, 1, 0);
     XTestFakeButtonEvent(NULL, 1, 0, 0);
+    char marker[512];
+    snprintf(marker, sizeof marker, "%s/droiddeck-remote-play", getenv("XDG_RUNTIME_DIR"));
+    if (access(marker, F_OK) != 0) return 4;
+    pid_t child = fork();
+    if (child == 0) { bl_venc_closed(fd); _exit(access(marker, F_OK) == 0 ? 0 : 1); }
+    int status;
+    waitpid(child, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) return 5;
     bl_venc_closed(fd);
+    if (access(marker, F_OK) == 0) return 6;
     XTestFakeButtonEvent(NULL, 1, 1, 0);
     usleep(200000);
     return 0;
@@ -194,7 +205,7 @@ class VencEmulatorTest(unittest.TestCase):
             self.assertEqual([f[2] for f in server.frames], [0, 1000000, 2000000])
             self.assertTrue(all(f[0] == 640 * 360 * 3 // 2 for f in server.frames))
 
-    def test_remote_touch_only_while_streaming_and_only_button_one(self):
+    def test_remote_touch_and_stream_marker_follow_the_streaming_process(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             driver = tmp / 'touch.c'
@@ -206,7 +217,7 @@ class VencEmulatorTest(unittest.TestCase):
             server = FakeEncoder(str(sock))
             self.addCleanup(server.listener.close)
             server.start()
-            done = subprocess.run([str(binary)], env=dict(os.environ, BL_VENC_SOCKET=str(sock)),
+            done = subprocess.run([str(binary)], env=dict(os.environ, BL_VENC_SOCKET=str(sock), XDG_RUNTIME_DIR=str(tmp)),
                                   capture_output=True, text=True, timeout=20)
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertEqual(server.touches, [(0, 65535, 32767), (1, 32767, 0), (2, 32767, 0)])

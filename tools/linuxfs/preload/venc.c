@@ -50,6 +50,7 @@ struct vq {
 
 struct venc {
     int used, fd;
+    pid_t owner;
     uint32_t width, height, stride, crop_w, crop_h, raw_size;
     uint32_t coded_fourcc, coded_size;
     uint32_t fps_num, fps_den;
@@ -155,6 +156,7 @@ __attribute__((visibility("hidden"))) int bl_venc_open(const char *path, int fla
     memset(v, 0, sizeof *v);
     v->used = 1;
     v->fd = fd;
+    v->owner = getpid();
     v->width = v->crop_w = 1280;
     v->height = v->crop_h = 720;
     v->coded_fourcc = V4L2_PIX_FMT_H264;
@@ -585,7 +587,8 @@ __attribute__((visibility("hidden"))) void bl_venc_closed(int fd) {
     vn_free_queue(&v->raw);
     vn_free_queue(&v->coded);
     v->used = 0;
-    if (__atomic_sub_fetch(&vn_open_count, 1, __ATOMIC_RELEASE) == 0) vn_marker(0);
+    /* A forked child closing its inherited copy must not end the stream for the parent. */
+    if (__atomic_sub_fetch(&vn_open_count, 1, __ATOMIC_RELEASE) == 0 && v->owner == getpid()) vn_marker(0);
     pthread_mutex_unlock(&vn_lock);
 }
 
