@@ -77,6 +77,7 @@ object SessionFiles {
             "usr/local/bin/droiddeck-x64-arm-webhelper" to "usr/local/bin/droiddeck-x64-arm-webhelper",
             "usr/local/bin/droiddeck-x64-webhelper" to "usr/local/bin/droiddeck-x64-webhelper",
             "usr/local/bin/droiddeck-steamvr" to "usr/local/bin/droiddeck-steamvr",
+            "usr/local/bin/droiddeck-pipewire" to "usr/local/bin/droiddeck-pipewire",
             "usr/local/bin/droiddeck-steamvr-settings" to "usr/local/bin/droiddeck-steamvr-settings",
             "usr/local/bin/droiddeck-steamvr-game" to "usr/local/bin/droiddeck-steamvr-game",
             "usr/local/bin/droiddeck-bwrap" to "usr/local/bin/droiddeck-bwrap",
@@ -132,6 +133,7 @@ object SessionFiles {
         val optional = (arrayOf(
             "usr/local/bin/gamescope" to "usr/local/bin/gamescope",
             "usr/local/lib/droiddeck/uruntime" to "usr/local/lib/droiddeck/uruntime",
+            "usr/local/lib/droiddeck-pipewire.tzst" to "usr/local/lib/droiddeck-pipewire.tzst",
             "usr/local/share/licenses/uruntime/LICENSE" to "usr/local/share/licenses/uruntime/LICENSE",
         ) + mangoapp + listOf("comet", "GalaxyCommunication.exe", "update-permissions.exe", "LICENSE", "version").map { "usr/local/lib/droiddeck-comet/$it" to "usr/local/lib/droiddeck-comet/$it" } + msitools.map { it to it } + vr + fexPreloads).filter { (asset, _) ->
             val dir = asset.substringBeforeLast('/')

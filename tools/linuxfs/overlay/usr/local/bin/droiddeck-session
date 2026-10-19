@@ -245,8 +245,15 @@ if [ -z "${BL_INSIDE:-}" ]; then
   fi
   export BL_INSIDE=1
   if [ "$mode" = steam ]; then
+    if /usr/local/bin/droiddeck-pipewire start; then
+      eval "$(/usr/local/bin/droiddeck-pipewire env)"
+    else
+      echo "== pipewire: not running; Remote Play and game recording have no picture"
+    fi
     run_gamescope "${args[@]}" -- "$0" "$mode" "$@"
-    exit $?
+    _bl_status=$?
+    /usr/local/bin/droiddeck-pipewire stop
+    exit $_bl_status
   fi
   exec gamescope "${args[@]}" -- "$0" "$mode" "$@"
 fi
