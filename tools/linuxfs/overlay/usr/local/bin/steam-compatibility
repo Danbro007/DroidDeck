@@ -251,6 +251,13 @@ bl_directaudio() {
   base=$1
   [ -n "${BL_DIRECTAUDIO:-}" ] || return 0
   [ -d "$BL_DIRECTAUDIO" ] || return 0
+  streamer=$(cat "${XDG_RUNTIME_DIR:-/tmp}/droiddeck-remote-play" 2>/dev/null)
+  if [ -n "$streamer" ] && kill -0 "$streamer" 2>/dev/null; then
+    WINE_AUDIO_DRIVER=pulse
+    export WINE_AUDIO_DRIVER
+    echo "droiddeck-proton: a Remote Play client is connected - game audio goes through PulseAudio so the stream carries it" >&2
+    return 0
+  fi
   version=$("$base/files/bin-arm64/wine" --version 2>/dev/null)
   major=${version#wine-}
   major=${major%%.*}

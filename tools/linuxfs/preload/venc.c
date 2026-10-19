@@ -64,6 +64,20 @@ static pthread_mutex_t vn_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct venc vn_all[VENC_INSTANCES];
 static int vn_open_count;
 
+static void vn_marker(int streaming) {
+    const char *dir = getenv("XDG_RUNTIME_DIR");
+    char path[512];
+    if (dir == NULL || snprintf(path, sizeof path, "%s/droiddeck-remote-play", dir) >= (int)sizeof path) return;
+    if (!streaming) {
+        unlink(path);
+        return;
+    }
+    FILE *f = fopen(path, "w");
+    if (f == NULL) return;
+    fprintf(f, "%d\n", (int)getpid());
+    fclose(f);
+}
+
 static void vn_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static void vn_log(const char *fmt, ...) {
     va_list ap;
@@ -149,7 +163,7 @@ __attribute__((visibility("hidden"))) int bl_venc_open(const char *path, int fla
     v->bitrate = 20000000;
     v->gop = 0xffff;
     vn_sizes(v);
-    __atomic_add_fetch(&vn_open_count, 1, __ATOMIC_RELEASE);
+    if (__atomic_add_fetch(&vn_open_count, 1, __ATOMIC_RELEASE) == 1) vn_marker(1);
     pthread_mutex_unlock(&vn_lock);
     vn_log("opened %s as fd %d (MediaCodec through the app)", path, fd);
     return fd;
@@ -571,7 +585,7 @@ __attribute__((visibility("hidden"))) void bl_venc_closed(int fd) {
     vn_free_queue(&v->raw);
     vn_free_queue(&v->coded);
     v->used = 0;
-    __atomic_sub_fetch(&vn_open_count, 1, __ATOMIC_RELEASE);
+    if (__atomic_sub_fetch(&vn_open_count, 1, __ATOMIC_RELEASE) == 0) vn_marker(0);
     pthread_mutex_unlock(&vn_lock);
 }
 
