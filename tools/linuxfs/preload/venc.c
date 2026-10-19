@@ -101,7 +101,13 @@ static void vn_free_queue(struct vq *q) {
     memset(q, 0, sizeof *q);
 }
 
-static int vn_connect(void) {
+__attribute__((visibility("hidden"))) int bl_venc_streaming(void) {
+    return __atomic_load_n(&vn_open_count, __ATOMIC_ACQUIRE) > 0;
+}
+
+__attribute__((visibility("hidden"))) int bl_venc_connect(void);
+
+int bl_venc_connect(void) {
     const char *path = getenv("BL_VENC_SOCKET");
     if (path == NULL || *path == '\0') return -1;
     struct sockaddr_un addr = { .sun_family = AF_UNIX };
@@ -121,7 +127,7 @@ static int vn_connect(void) {
 __attribute__((visibility("hidden"))) int bl_venc_open(const char *path, int flags) {
     (void)flags;
     if (path == NULL || strcmp(path, VENC_DEVICE) != 0) return -2;
-    int fd = vn_connect();
+    int fd = bl_venc_connect();
     if (fd < 0) return -2;
     pthread_mutex_lock(&vn_lock);
     struct venc *v = NULL;

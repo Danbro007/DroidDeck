@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PROTO = ROOT / 'app/src/main/cpp/venc/venc_proto.h'
 VENC = ROOT / 'tools/linuxfs/preload/venc.c'
+TOUCH = ROOT / 'tools/linuxfs/preload/rptouch.c'
 
 DRIVER = r'''
 #include <errno.h>
@@ -88,6 +89,34 @@ int main(void) {
 }
 '''
 
+TOUCH_DRIVER = r'''
+#include <stdio.h>
+#include <unistd.h>
+
+int bl_venc_open(const char *path, int flags);
+void bl_venc_closed(int fd);
+int XTestFakeMotionEvent(void *dpy, int screen, int x, int y, unsigned long delay);
+int XTestFakeButtonEvent(void *dpy, unsigned int button, int press, unsigned long delay);
+int XDisplayWidth(void *dpy, int screen) { return 1281; }
+int XDisplayHeight(void *dpy, int screen) { return 721; }
+
+int main(void) {
+    XTestFakeButtonEvent(NULL, 1, 1, 0);
+    XTestFakeButtonEvent(NULL, 1, 0, 0);
+    int fd = bl_venc_open("/dev/video-enc0", 0);
+    if (fd < 0) return 3;
+    XTestFakeMotionEvent(NULL, 0, 1280, 360, 0);
+    XTestFakeButtonEvent(NULL, 1, 1, 0);
+    XTestFakeMotionEvent(NULL, 0, 640, 0, 0);
+    XTestFakeButtonEvent(NULL, 3, 1, 0);
+    XTestFakeButtonEvent(NULL, 1, 0, 0);
+    bl_venc_closed(fd);
+    XTestFakeButtonEvent(NULL, 1, 1, 0);
+    usleep(200000);
+    return 0;
+}
+'''
+
 CONFIG = struct.Struct('<' + 'I' * 12 + 'ii' + 'I' * 4)
 FRAME = struct.Struct('<IIIII4xq')
 DONE = struct.Struct('<IiII')
@@ -99,10 +128,17 @@ class FakeEncoder(threading.Thread):
         self.listener = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         self.listener.bind(path)
         self.listener.listen(1)
-        self.configs, self.frames = [], []
+        self.configs, self.frames, self.touches = [], [], []
 
     def run(self):
-        conn, _ = self.listener.accept()
+        while True:
+            try:
+                conn, _ = self.listener.accept()
+            except OSError:
+                return
+            threading.Thread(target=self.serve, args=(conn,), daemon=True).start()
+
+    def serve(self, conn):
         outputs = []
         while True:
             fds = array.array('i')
@@ -113,7 +149,9 @@ class FakeEncoder(threading.Thread):
                 if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
                     fds.frombytes(data[:len(data) - len(data) % fds.itemsize])
             kind = struct.unpack_from('<I', msg)[0]
-            if kind == 1:
+            if kind == 5:
+                self.touches.append(struct.unpack('<IIII', msg)[1:])
+            elif kind == 1:
                 c = CONFIG.unpack(msg)
                 self.configs.append(c)
                 inputs, size = c[14], c[17]
@@ -155,6 +193,23 @@ class VencEmulatorTest(unittest.TestCase):
             self.assertEqual([f[1] for f in server.frames], [0, 1, 0])
             self.assertEqual([f[2] for f in server.frames], [0, 1000000, 2000000])
             self.assertTrue(all(f[0] == 640 * 360 * 3 // 2 for f in server.frames))
+
+    def test_remote_touch_only_while_streaming_and_only_button_one(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            driver = tmp / 'touch.c'
+            driver.write_text(TOUCH_DRIVER)
+            binary = tmp / 'touch'
+            subprocess.run(['cc', '-O1', '-pthread', '-rdynamic', '-o', str(binary), str(driver), str(VENC), str(TOUCH),
+                            '-ldl'], check=True)
+            sock = tmp / 'venc.sock'
+            server = FakeEncoder(str(sock))
+            self.addCleanup(server.listener.close)
+            server.start()
+            done = subprocess.run([str(binary)], env=dict(os.environ, BL_VENC_SOCKET=str(sock)),
+                                  capture_output=True, text=True, timeout=20)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual(server.touches, [(0, 65535, 32767), (1, 32767, 0), (2, 32767, 0)])
 
 
 if __name__ == '__main__':

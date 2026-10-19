@@ -31,6 +31,8 @@ struct Mapping {
 constexpr int32_t kColorFormatYuv420SemiPlanar = 21;
 constexpr uint32_t kBufferFlagKeyFrame = 1;
 constexpr uint32_t kBufferFlagCodecConfig = 2;
+constexpr int kTouchWidth = 1920, kTouchHeight = 1080;  // InputSpace.kt
+constexpr int kRemoteTouchId = 31;  // the compositor's last touch slot (MAX_TOUCH_POINTS 32)
 
 int32_t avc_profile(int32_t v4l2) {
     switch (v4l2) {
@@ -73,6 +75,11 @@ public:
                 bool key = false;
                 bool ok = encode(f, &bytes, &key);
                 reply(ok ? 0 : -1, bytes, key);
+            } else if (type == VENC_TOUCH && n == (ssize_t)sizeof(venc_touch)) {
+                venc_touch t;
+                memcpy(&t, buf, sizeof t);
+                touch(t);
+                for (int i = 0; i < nfds; i++) close(fds[i]);
             } else if (type == VENC_BITRATE && n == (ssize_t)sizeof(venc_bitrate)) {
                 venc_bitrate b;
                 memcpy(&b, buf, sizeof b);
@@ -198,6 +205,20 @@ private:
             c.width, c.height, c.fps_num ? (double)c.fps_den / c.fps_num : 0.0, c.bitrate / 1000,
             c.vbr ? "VBR" : "CBR", dst_stride_, dst_rows_);
         return true;
+    }
+
+    static void touch(const venc_touch &t) {
+        using SendTouch = void (*)(int, int, int, int);
+        static SendTouch send_touch = [] {
+            void *wayland = dlopen("libdroiddeckwayland.so", RTLD_NOW | RTLD_NOLOAD);
+            auto fn = wayland ? (SendTouch)dlsym(wayland, "droiddeck_wayland_send_touch") : nullptr;
+            if (!fn) LOG("remote touch unavailable: %s", dlerror());
+            return fn;
+        }();
+        if (!send_touch || t.action > VENC_TOUCH_UP) return;
+        int x = (int)((uint64_t)std::min(t.x, 65535u) * (kTouchWidth - 1) / 65535);
+        int y = (int)((uint64_t)std::min(t.y, 65535u) * (kTouchHeight - 1) / 65535);
+        send_touch((int)t.action, kRemoteTouchId, x, y);
     }
 
     void set_bitrate(uint32_t bitrate) {
