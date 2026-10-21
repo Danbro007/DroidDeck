@@ -19,7 +19,9 @@ property still uses an older platform name. Driver auto selection uses the
 same detection, with existing external-driver and Quest overrides retained.
 This does not start a new Vulkan query during driver selection.
 
-A850 is labelled experimental. Identifying the hardware does not add native
+A850 is labelled experimental. The SM8975 platform identity retains that
+classification even when the selected driver reports Adreno 840; the displayed
+model still follows the KGSL/Vulkan name. Identifying the hardware does not add native
 A850 support to Turnip or prove that Steam and games will run.
 
 ## Optional community driver bundle

@@ -15,6 +15,7 @@ data class GpuInfo(
     val kgslName: String = "",
     val modelSource: String = "",
     val kgslChipId: String = "",
+    val platformGpuModel: Int = 0,
 ) {
     enum class Family(val label: String) {
         A8XX("Adreno 8xx"),
@@ -29,11 +30,13 @@ data class GpuInfo(
 
     enum class Support { TESTED, UNTESTED, UNSUPPORTED }
 
+    private val isA850: Boolean get() = model == 850 || platformGpuModel == 850
+
     val support: Support
         get() = when {
             family == Family.NOT_ADRENO -> Support.UNSUPPORTED
+            isA850 -> Support.UNTESTED
             family == Family.A6XX && model == 650 -> Support.TESTED
-            family == Family.A8XX && model == 850 -> Support.UNTESTED
             family == Family.A8XX -> Support.TESTED
             family == Family.A7XX && model >= 725 -> Support.TESTED
             else -> Support.UNTESTED
@@ -42,7 +45,7 @@ data class GpuInfo(
     val supportText: String
         get() = when (support) {
             Support.TESTED -> "Supported"
-            Support.UNTESTED -> if (model == 850) "Experimental Adreno 850 support: requires compatible experimental display and game drivers; not verified on this device"
+            Support.UNTESTED -> if (isA850) "Experimental Adreno 850 support: requires compatible experimental display and game drivers; not verified on this device"
                 else if (family == Family.A7XX_LOW) "Experimental: its drivers are test builds"
                 else "Outside tested hardware (Adreno 650, 725 and newer): it may not run"
             Support.UNSUPPORTED -> "Not supported: DroidDeck needs an Adreno (Snapdragon) GPU"
@@ -51,7 +54,7 @@ data class GpuInfo(
     fun supportText(context: Context): String = context.getString(when (support) {
         Support.TESTED -> R.string.gpuinfo_supported
         Support.UNTESTED -> when {
-            model == 850 -> R.string.gpuinfo_a850_experimental
+            isA850 -> R.string.gpuinfo_a850_experimental
             family == Family.A7XX_LOW -> R.string.gpuinfo_experimental
             else -> R.string.gpuinfo_below_tested
         }
@@ -68,10 +71,11 @@ data class GpuInfo(
             val raw = FileUtils.readString(File("/sys/class/kgsl/kgsl-3d0/gpu_model"))?.trim()
             val chipId = FileUtils.readString(File("/sys/class/kgsl/kgsl-3d0/gpu_chipid"))?.trim().orEmpty()
             val soc = if (adreno) SocNames.label() else ""
+            val platformGpuModel = if (adreno) platformModel() else 0
             val (model, source) = if (adreno) modelFromNames(
                 raw,
                 { VulkanInfo.cachedOrNull()?.get("device") },
-                { platformModel() },
+                { platformGpuModel },
             ) else 0 to ""
             val family = familyOf(adreno, model)
             val samsung = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
@@ -80,6 +84,7 @@ data class GpuInfo(
                 model = model, family = family, soc = soc,
                 oneUi8Gen2 = samsung && model == 740,
                 kgslName = raw.orEmpty(), modelSource = source, kgslChipId = chipId,
+                platformGpuModel = platformGpuModel,
             )
         }
 

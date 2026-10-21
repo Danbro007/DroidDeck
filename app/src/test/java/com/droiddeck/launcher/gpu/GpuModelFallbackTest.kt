@@ -43,4 +43,29 @@ class GpuModelFallbackTest {
         }
         assertEquals(0 to "", GpuInfo.modelFromNames(null, { null }, { 0 }))
     }
+
+    @Test fun sm8975StaysExperimentalWhenTheDriverReportsA840() {
+        val fallback = GpuInfo.platformModel("sun", "", "SM8975")
+        for (kernel in listOf("Adreno", "Adreno (TM) 840")) {
+            val (model, source) = GpuInfo.modelFromNames(kernel, { "Adreno (TM) 840" }, { fallback })
+            val gpu = GpuInfo("Adreno $model", model, GpuInfo.familyOf(true, model), "SM8975", false,
+                modelSource = source, platformGpuModel = fallback)
+            assertEquals(840, gpu.model)
+            assertEquals(if (kernel == "Adreno") "vulkan" else "kernel", gpu.modelSource)
+            assertEquals(GpuInfo.Support.UNTESTED, gpu.support)
+            assertEquals("Experimental Adreno 850 support: requires compatible experimental display and game drivers; not verified on this device", gpu.supportText)
+        }
+    }
+
+    @Test fun anA840WithoutSm8975KeepsItsExistingSupportStatus() {
+        for (fallback in listOf(0, 830, 840)) {
+            val gpu = GpuInfo("Adreno 840", 840, GpuInfo.Family.A8XX, "", false,
+                platformGpuModel = fallback)
+            assertEquals(GpuInfo.Support.TESTED, gpu.support)
+            assertEquals("Supported", gpu.supportText)
+        }
+        val otherGpu = GpuInfo("Mali", 0, GpuInfo.Family.NOT_ADRENO, "", false,
+            platformGpuModel = 850)
+        assertEquals(GpuInfo.Support.UNSUPPORTED, otherGpu.support)
+    }
 }
