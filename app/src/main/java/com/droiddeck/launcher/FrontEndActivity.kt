@@ -158,6 +158,8 @@ class FrontEndActivity : ComponentActivity() {
     private var phantomWarning by mutableStateOf<String?>(null)
     private var phantomProcessStatus by mutableStateOf(PhantomProcessStatus.NOT_APPLICABLE)
     private var showPhantomGate by mutableStateOf(false)
+    private var phantomStatusChecking = false
+    private var phantomStatusCheckedAt: Long? = null
     private var directAudio by mutableStateOf(false)
     private var picturePosition by mutableStateOf("center")
     private var stretch16x9 by mutableStateOf(false)
@@ -2079,7 +2081,7 @@ class FrontEndActivity : ComponentActivity() {
         return true
     }
 
-    private fun refreshPhantomStatus() {
+    private fun refreshPhantomStatus(verifyWithAdb: Boolean = true) {
         phantomProcessStatus = PhantomProcessLimit.read(this)
         phantomWarning = if (PhantomProcessLimit.blocksSteam(phantomProcessStatus)) {
             getString(
@@ -2087,6 +2089,20 @@ class FrontEndActivity : ComponentActivity() {
                 PhantomProcessLimit.instructions(this, phantomProcessStatus), PhantomProcessLimit.adbCommand(),
             )
         } else null
+        if (!verifyWithAdb || !PhantomProcessLimit.blocksSteam(phantomProcessStatus) || phantomStatusChecking) return
+        if (WirelessAdbFix.savedConnectionAddress(this) == null) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (phantomStatusCheckedAt?.let { now - it < 30_000L } == true) return
+        phantomStatusChecking = true
+        phantomStatusCheckedAt = now
+        val appContext = applicationContext
+        Thread({
+            runCatching { WirelessAdbFix.refreshUsingSavedPairing(appContext) }
+            ui.post {
+                phantomStatusChecking = false
+                if (!isDestroyed) refreshPhantomStatus(verifyWithAdb = false)
+            }
+        }, "phantom-process-check").start()
     }
 
     private fun openDeveloperOptions(displayId: Int?) {
