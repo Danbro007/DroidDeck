@@ -29,7 +29,7 @@ fallback.
 Wireless ADB tries the two setting writes independently, then reads the global
 flag, its property override, and the process-count setting. Success depends on
 the readback, not on a command merely exiting successfully. Restoring restrictions
-also requires verification of both applicable controls. The repair does not
+also requires verification of both applicable controls. Ordinary repairs do not
 change DeviceConfig's global synchronization policy.
 
 A verified shell snapshot bridges only the otherwise unreadable DeviceConfig
@@ -45,6 +45,38 @@ that hide DeviceConfig, a computer-only ADB change still needs Wireless debuggin
 verification in DroidDeck. The gate exposes that action even on Android versions
 that normally have a Developer options switch.
 
+## Restoring an older Android 12 repair
+
+Older releases wrote `set_sync_disabled_for_tests persistent` and stored the
+`android12-off` acknowledgement. This marker never bypasses the launch check.
+It only identifies users who may need to undo that older device-wide change,
+including after an Android upgrade. Startup and read-only verification do not
+change the synchronization policy.
+
+Restoration with this marker requires an explicit in-app confirmation explaining
+that Android system configuration updates may be re-enabled. The old release did
+not save the previous mode, so the marker cannot prove exclusive ownership or
+rule out a later change by another tool. Without confirmation, restoration makes
+no system writes. With confirmation, it verifies child-process restrictions first,
+then queries the synchronization mode:
+
+- `persistent`: set `none`, then require a successful readback of `none`.
+- `none` or `until_reboot`: preserve the current policy.
+- An explicitly unsupported mode query: use the older boolean query. A disabled
+  result is ambiguous, so resetting it also depends on the explicit confirmation.
+  A successful write must read back `false`.
+- Missing values, permission errors, failed commands, or unknown modes: report
+  incomplete restoration and retain the marker for retry.
+
+When child-process restrictions are already restored, Setup still offers
+"Restore older settings" while the marker remains, so a failed synchronization
+recovery can be retried without first removing restrictions again.
+
+Clear the marker only after the full operation succeeds. These commands have no
+ownership or compare-and-set facility, and a device restart may be needed before
+configuration updates resume. No-marker or interrupted older operations cannot
+be inferred from a disabled synchronization mode alone.
+
 ## Sources
 
 - [Android 12 count trimming](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-12.0.0_r1/services/core/java/com/android/server/am/PhantomProcessList.java#L421)
@@ -52,14 +84,18 @@ that normally have a Developer options switch.
 - [Global flag and property precedence](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-13.0.0_r1/core/java/android/util/FeatureFlagUtils.java#L139)
 - [DeviceConfig read permission](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-13.0.0_r1/core/java/android/provider/DeviceConfig.java#L1198)
 - [Permission protection level](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-13.0.0_r1/core/res/AndroidManifest.xml#L3490)
+- [Synchronization mode and legacy query compatibility](https://android.googlesource.com/platform/frameworks/libs/net/+/a9f72028e7e51f3808108e08611dc785beafccb3/common/testutils/host/com/android/testutils/DisableConfigSyncTargetPreparer.kt#45)
+- [DeviceConfig synchronization and restart](https://source.android.com/docs/core/connect/time#configure-a-device-using-the-device_config-service)
 - [Separate background CPU check](https://github.com/aosp-mirror/platform_frameworks_base/blob/android-13.0.0_r1/services/core/java/com/android/server/am/ActivityManagerService.java#L15196)
 
 ## Validation
 
 Run `PhantomProcessLimitTest`, `WirelessAdbFixTest`, and
-`PhantomProcessGatePageTest` with Gradle's `testDebugUnitTest` task. These cover
+`PhantomProcessGatePageTest`, `LegacyDeviceConfigSyncTest`, and
+`LegacySyncRecoveryDialogTest` with Gradle's `testReleaseUnitTest` task. These cover
 reported readback values, independent write failures, strict restoration,
-short-lived verification, and access to Wireless debugging on newer ROMs.
+short-lived verification, access to Wireless debugging on newer ROMs, and
+confirmed legacy synchronization restoration, cancellation, and failure retry.
 
 These tests do not establish physical-device compatibility. HyperOS/MIUI and
 Realme UI still need device testing for write permissions, pairing, repeated

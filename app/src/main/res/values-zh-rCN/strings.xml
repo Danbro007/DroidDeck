@@ -1763,6 +1763,13 @@
     <string name="adbfix_no_pairing">未保存任何无线调试配对</string>
     <string name="adbfix_enter_address">请输入当前的无线调试 IP 地址与端口</string>
     <string name="adbfix_local_only">请使用本机的无线调试地址。其他设备无法验证本机的子进程限制。</string>
+    <string name="adbfix_legacy_sync_title">恢复旧版 DroidDeck 更改的设置？</string>
+    <string name="adbfix_legacy_sync_message">旧版 Android 12 修复可能关闭了整台设备的系统配置更新（DeviceConfig）。继续操作可能重新开启这些更新，同时恢复子进程限制。DroidDeck 无法判断其他工具后来是否更改过此策略。仅在您也希望恢复系统配置更新时继续。操作后可能需要重启设备。</string>
+    <string name="adbfix_legacy_sync_restore">恢复限制和系统配置更新</string>
+    <string name="adbfix_legacy_sync_retry">恢复旧版设置</string>
+    <string name="adbfix_legacy_sync_cancelled">已取消恢复。</string>
+    <string name="adbfix_legacy_sync_confirmation_required">请先确认恢复旧版更改的系统配置同步设置。</string>
+    <string name="adbfix_legacy_sync_not_confirmed">子进程限制已恢复，但无法确认旧版系统配置同步设置已恢复，请重试。%1$s</string>
 
     <string name="adbpair_timed_out">等待配对弹窗超时。请从 DroidDeck 重试。</string>
     <string name="adbpair_discovery_failed_code">无法查找配对弹窗（%1$d）。请检查 Wi-Fi 是否已开启。</string>

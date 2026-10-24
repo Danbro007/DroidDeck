@@ -1687,6 +1687,13 @@
     <string name="adbfix_no_pairing">沒有已儲存的無線偵錯配對</string>
     <string name="adbfix_enter_address">請輸入目前的無線偵錯 IP 位址和連接埠</string>
     <string name="adbfix_local_only">請使用本機的無線偵錯位址。其他裝置無法驗證本機的子程序限制。</string>
+    <string name="adbfix_legacy_sync_title">還原舊版 DroidDeck 更改的設定？</string>
+    <string name="adbfix_legacy_sync_message">舊版 Android 12 修復可能關閉了整部裝置的系統設定更新（DeviceConfig）。繼續操作可能重新開啟這些更新，同時還原子程序限制。DroidDeck 無法判斷其他工具後來是否更改過此原則。僅在您也希望還原系統設定更新時繼續。操作後可能需要重新啟動裝置。</string>
+    <string name="adbfix_legacy_sync_restore">還原限制和系統設定更新</string>
+    <string name="adbfix_legacy_sync_retry">還原舊版設定</string>
+    <string name="adbfix_legacy_sync_cancelled">已取消還原。</string>
+    <string name="adbfix_legacy_sync_confirmation_required">請先確認還原舊版更改的系統設定同步設定。</string>
+    <string name="adbfix_legacy_sync_not_confirmed">子程序限制已還原，但無法確認舊版系統設定同步設定已還原，請重試。%1$s</string>
 
     <string name="adbpair_timed_out">等待配對彈出式視窗逾時，請在 DroidDeck 重試。</string>
     <string name="adbpair_discovery_failed_code">無法尋找配對彈出式視窗（%1$d）。請確認 Wi-Fi 已開啟。</string>

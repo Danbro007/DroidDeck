@@ -1051,24 +1051,36 @@ class FrontEndActivity : ComponentActivity() {
                             }, "wireless-adb-discovery").start()
                         },
                         onWirelessAdbApply = { host, port, enabled, complete ->
-                            Thread({
-                                val result = runCatching { WirelessAdbFix.setChildProcessLimit(this@FrontEndActivity, host, port, enabled) }
-                                val error = result.exceptionOrNull()?.let { it.localizedMessage ?: getString(R.string.main_wadb_command_failed) }
-                                ui.post {
-                                    if (error == null) refreshPhantomStatus()
-                                    complete(error)
-                                }
-                            }, "wireless-adb-fix").start()
+                            com.droiddeck.launcher.ui.LegacySyncRecoveryDialog.request(this, enabled,
+                                onCancelled = { complete(com.droiddeck.launcher.ui.LegacySyncRecoveryDialog.CANCELLED) },
+                            ) { recoverLegacySync ->
+                                Thread({
+                                    val result = runCatching {
+                                        WirelessAdbFix.setChildProcessLimit(this@FrontEndActivity, host, port, enabled, recoverLegacySync)
+                                    }
+                                    val error = result.exceptionOrNull()?.let { it.localizedMessage ?: getString(R.string.main_wadb_command_failed) }
+                                    ui.post {
+                                        if (error == null) refreshPhantomStatus()
+                                        complete(error)
+                                    }
+                                }, "wireless-adb-fix").start()
+                            }
                         },
                         onSetPhantomProcessLimit = { enabled, complete ->
-                            Thread({
-                                val result = runCatching { WirelessAdbFix.setUsingSavedPairing(this@FrontEndActivity, enabled) }
-                                val error = result.exceptionOrNull()?.let { it.localizedMessage ?: getString(R.string.main_wadb_unavailable) }
-                                ui.post {
-                                    if (error == null) refreshPhantomStatus()
-                                    complete(error)
-                                }
-                            }, "wireless-adb-setting").start()
+                            com.droiddeck.launcher.ui.LegacySyncRecoveryDialog.request(this, enabled,
+                                onCancelled = { complete(com.droiddeck.launcher.ui.LegacySyncRecoveryDialog.CANCELLED) },
+                            ) { recoverLegacySync ->
+                                Thread({
+                                    val result = runCatching {
+                                        WirelessAdbFix.setUsingSavedPairing(this@FrontEndActivity, enabled, recoverLegacySync)
+                                    }
+                                    val error = result.exceptionOrNull()?.let { it.localizedMessage ?: getString(R.string.main_wadb_unavailable) }
+                                    ui.post {
+                                        if (error == null) refreshPhantomStatus()
+                                        complete(error)
+                                    }
+                                }, "wireless-adb-setting").start()
+                            }
                         },
                         onCopyPhantomCommand = { enabled ->
                             (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(

@@ -14,6 +14,134 @@ class WirelessAdbFixTest {
     private val globalOn = "settings put global settings_enable_monitor_phantom_procs true"
     private val deviceConfigOn = "device_config delete activity_manager max_phantom_processes"
 
+    @Test
+    fun legacyPersistentSyncIsRestoredOnlyAfterChildLimitsAreVerified() {
+        val shell = Shell(
+            global = WirelessAdbFix.ShellResult(0, "true"),
+            maxPhantom = WirelessAdbFix.ShellResult(0, "null"),
+        )
+        val commands = mutableListOf<String>()
+        var syncMode = "persistent"
+
+        val result = WirelessAdbFix.changeLimit(true, 33, legacySyncPending = true, recoverLegacySync = true) { command ->
+            commands += command
+            when (command) {
+                "device_config get_sync_disabled_for_tests" -> WirelessAdbFix.ShellResult(0, syncMode)
+                "device_config set_sync_disabled_for_tests none" -> {
+                    syncMode = "none"
+                    WirelessAdbFix.ShellResult(0, "")
+                }
+                else -> shell.execute(command)
+            }
+        }
+
+        assertTrue(result.confirmed)
+        assertTrue(result.legacySyncRecovered)
+        assertEquals("none", syncMode)
+        assertTrue(commands.indexOf(PhantomProcessLimit.DEVICE_CONFIG_QUERY) < commands.indexOf("device_config set_sync_disabled_for_tests none"))
+    }
+
+    @Test
+    fun pendingLegacySyncWithoutConsentRejectsBeforeAnyShellCommand() {
+        for (sdk in listOf(31, 33, 35)) {
+            val commands = mutableListOf<String>()
+
+            assertThrows(IllegalStateException::class.java) {
+                WirelessAdbFix.changeLimit(true, sdk, legacySyncPending = true) { command ->
+                    commands += command
+                    WirelessAdbFix.ShellResult(0, "true")
+                }
+            }
+
+            assertTrue("SDK $sdk", commands.isEmpty())
+        }
+    }
+
+    @Test
+    fun newUserRestoreDoesNotReadOrWriteSharedSyncPolicy() {
+        val shell = Shell(
+            global = WirelessAdbFix.ShellResult(0, "true"),
+            maxPhantom = WirelessAdbFix.ShellResult(0, "null"),
+        )
+
+        val result = WirelessAdbFix.changeLimit(true, 33, recoverLegacySync = true, shell = shell::execute)
+
+        assertTrue(result.confirmed)
+        assertFalse(result.legacySyncRecovered)
+        assertFalse(result.legacySyncFailure)
+        assertFalse(shell.commands.any { "_sync_disabled_for_tests" in it })
+    }
+
+    @Test
+    fun disablingChildLimitDoesNotRecoverPendingSyncPolicy() {
+        val shell = Shell(
+            global = WirelessAdbFix.ShellResult(0, "false"),
+            maxPhantom = WirelessAdbFix.ShellResult(0, "2147483647"),
+        )
+
+        val result = WirelessAdbFix.changeLimit(false, 33, legacySyncPending = true, shell = shell::execute)
+
+        assertTrue(result.confirmed)
+        assertFalse(result.legacySyncRecovered)
+        assertFalse(shell.commands.any { "_sync_disabled_for_tests" in it })
+    }
+
+    @Test
+    fun failedChildVerificationDoesNotTouchLegacySyncPolicy() {
+        val shell = Shell(
+            global = WirelessAdbFix.ShellResult(0, "true"),
+            maxPhantom = WirelessAdbFix.ShellResult(0, "2147483647"),
+        )
+
+        val result = WirelessAdbFix.changeLimit(true, 33, legacySyncPending = true, recoverLegacySync = true, shell = shell::execute)
+
+        assertFalse(result.confirmed)
+        assertFalse(result.legacySyncRecovered)
+        assertFalse(result.legacySyncFailure)
+        assertFalse(shell.commands.any { "_sync_disabled_for_tests" in it })
+    }
+
+    @Test
+    fun unconfirmedLegacyRecoveryReportsPartialFailure() {
+        val shell = Shell(
+            global = WirelessAdbFix.ShellResult(0, "true"),
+            maxPhantom = WirelessAdbFix.ShellResult(0, "null"),
+        )
+
+        val result = WirelessAdbFix.changeLimit(true, 33, legacySyncPending = true, recoverLegacySync = true) { command ->
+            when (command) {
+                LegacyDeviceConfigSync.GET_MODE -> WirelessAdbFix.ShellResult(0, "persistent")
+                LegacyDeviceConfigSync.RESTORE -> WirelessAdbFix.ShellResult(0, "")
+                else -> shell.execute(command)
+            }
+        }
+
+        assertFalse(result.confirmed)
+        assertTrue(result.legacySyncFailure)
+        assertFalse(result.legacySyncRecovered)
+        assertEquals("true", result.readings.global)
+        assertEquals("null", result.readings.maxPhantom)
+    }
+
+    @Test
+    fun legacyMarkerRemainsRecoverableAfterAndroidUpgrade() {
+        for (sdk in listOf(31, 35)) {
+            val shell = Shell(
+                global = WirelessAdbFix.ShellResult(0, "true"),
+                maxPhantom = WirelessAdbFix.ShellResult(0, "null"),
+            )
+
+            val result = WirelessAdbFix.changeLimit(true, sdk, legacySyncPending = true, recoverLegacySync = true) { command ->
+                if (command == LegacyDeviceConfigSync.GET_MODE) WirelessAdbFix.ShellResult(0, "until_reboot")
+                else shell.execute(command)
+            }
+
+            assertTrue("SDK $sdk", result.confirmed)
+            assertTrue("SDK $sdk", result.legacySyncRecovered)
+            assertFalse(shell.commands.any { "_sync_disabled_for_tests" in it })
+        }
+    }
+
     private fun address(vararg octets: Int): InetAddress = InetAddress.getByAddress(octets.map(Int::toByte).toByteArray())
 
     @Test
@@ -145,7 +273,7 @@ class WirelessAdbFixTest {
             failures = mapOf(globalOff to WirelessAdbFix.ShellResult(1, "", "SecurityException")),
         )
 
-        val result = WirelessAdbFix.changeLimit(false, 33, shell::execute)
+        val result = WirelessAdbFix.changeLimit(false, 33, shell = shell::execute)
 
         assertTrue(result.confirmed)
         assertTrue(shell.commands.containsAll(listOf(globalOff, deviceConfigOff)))
@@ -159,7 +287,7 @@ class WirelessAdbFixTest {
             failures = mapOf(deviceConfigOff to WirelessAdbFix.ShellResult(1, "", "Permission denied")),
         )
 
-        val result = WirelessAdbFix.changeLimit(false, 35, shell::execute)
+        val result = WirelessAdbFix.changeLimit(false, 35, shell = shell::execute)
 
         assertTrue(result.confirmed)
         assertTrue(shell.commands.containsAll(listOf(globalOff, deviceConfigOff)))
@@ -172,7 +300,7 @@ class WirelessAdbFixTest {
             throwing = globalOff,
         )
 
-        val result = WirelessAdbFix.changeLimit(false, 31, shell::execute)
+        val result = WirelessAdbFix.changeLimit(false, 31, shell = shell::execute)
 
         assertTrue(result.confirmed)
         assertTrue(shell.commands.containsAll(listOf(globalOff, deviceConfigOff)))
@@ -183,7 +311,7 @@ class WirelessAdbFixTest {
     fun successfulCommandExitWithoutChangedValuesIsNotConfirmation() {
         val shell = Shell()
 
-        val result = WirelessAdbFix.changeLimit(false, 33, shell::execute)
+        val result = WirelessAdbFix.changeLimit(false, 33, shell = shell::execute)
 
         assertFalse(result.confirmed)
         assertEquals("null\n", result.readings.global)
@@ -194,21 +322,21 @@ class WirelessAdbFixTest {
     fun numericZeroReadBackConfirmsMonitoringDisabled() {
         val shell = Shell(global = WirelessAdbFix.ShellResult(0, "0\n"))
 
-        assertTrue(WirelessAdbFix.changeLimit(false, 33, shell::execute).confirmed)
+        assertTrue(WirelessAdbFix.changeLimit(false, 33, shell = shell::execute).confirmed)
     }
 
     @Test
     fun developerPropertyCanConfirmMonitoringDisabledWhenGlobalIsUnset() {
         val shell = Shell(override = WirelessAdbFix.ShellResult(0, "false\n"))
 
-        assertTrue(WirelessAdbFix.changeLimit(false, 34, shell::execute).confirmed)
+        assertTrue(WirelessAdbFix.changeLimit(false, 34, shell = shell::execute).confirmed)
     }
 
     @Test
     fun android12StillRequiresVerifiedLargeDeviceConfigLimit() {
         val shell = Shell(global = WirelessAdbFix.ShellResult(0, "false"))
 
-        assertFalse(WirelessAdbFix.changeLimit(false, 31, shell::execute).confirmed)
+        assertFalse(WirelessAdbFix.changeLimit(false, 31, shell = shell::execute).confirmed)
     }
 
     @Test
@@ -218,7 +346,7 @@ class WirelessAdbFixTest {
             maxPhantom = WirelessAdbFix.ShellResult(0, "2147483647"),
         )
 
-        val result = WirelessAdbFix.changeLimit(false, 33, shell::execute)
+        val result = WirelessAdbFix.changeLimit(false, 33, shell = shell::execute)
 
         assertTrue(result.confirmed)
         assertFalse(result.readings.globalReadable)
@@ -232,7 +360,7 @@ class WirelessAdbFixTest {
             maxPhantom = WirelessAdbFix.ShellResult(1, "", "Permission denied"),
         )
 
-        val result = WirelessAdbFix.changeLimit(false, 35, shell::execute)
+        val result = WirelessAdbFix.changeLimit(false, 35, shell = shell::execute)
 
         assertTrue(result.confirmed)
         assertFalse(result.readings.deviceConfigReadable)
@@ -246,7 +374,7 @@ class WirelessAdbFixTest {
             maxPhantom = WirelessAdbFix.ShellResult(1, "", "DeviceConfig read failed"),
         )
 
-        val result = WirelessAdbFix.changeLimit(false, 33, shell::execute)
+        val result = WirelessAdbFix.changeLimit(false, 33, shell = shell::execute)
 
         assertFalse(result.confirmed)
         assertTrue(result.diagnostics.contains("Global read failed"))
@@ -260,7 +388,7 @@ class WirelessAdbFixTest {
             maxPhantom = WirelessAdbFix.ShellResult(1, "2147483647", "DeviceConfig read failed"),
         )
 
-        assertFalse(WirelessAdbFix.changeLimit(false, 33, shell::execute).confirmed)
+        assertFalse(WirelessAdbFix.changeLimit(false, 33, shell = shell::execute).confirmed)
     }
 
     @Test
@@ -286,8 +414,8 @@ class WirelessAdbFixTest {
             maxPhantom = WirelessAdbFix.ShellResult(0, "Permission denied"),
         )
 
-        assertFalse(WirelessAdbFix.changeLimit(false, 33, shell::execute).confirmed)
-        assertFalse(WirelessAdbFix.changeLimit(true, 33, shell::execute).confirmed)
+        assertFalse(WirelessAdbFix.changeLimit(false, 33, shell = shell::execute).confirmed)
+        assertFalse(WirelessAdbFix.changeLimit(true, 33, shell = shell::execute).confirmed)
     }
 
     @Test
@@ -297,7 +425,7 @@ class WirelessAdbFixTest {
             maxPhantom = WirelessAdbFix.ShellResult(0, "2147483647"),
         )
 
-        assertFalse(WirelessAdbFix.changeLimit(true, 33, shell::execute).confirmed)
+        assertFalse(WirelessAdbFix.changeLimit(true, 33, shell = shell::execute).confirmed)
         assertTrue(shell.commands.containsAll(listOf(globalOn, deviceConfigOn)))
     }
 
@@ -305,7 +433,7 @@ class WirelessAdbFixTest {
     fun restoringMaxAloneDoesNotRestoreRestrictionWithDisabledFlag() {
         val shell = Shell(global = WirelessAdbFix.ShellResult(0, "false"))
 
-        assertFalse(WirelessAdbFix.changeLimit(true, 35, shell::execute).confirmed)
+        assertFalse(WirelessAdbFix.changeLimit(true, 35, shell = shell::execute).confirmed)
     }
 
     @Test
@@ -315,7 +443,7 @@ class WirelessAdbFixTest {
             maxPhantom = WirelessAdbFix.ShellResult(0, "null\n"),
         )
 
-        assertTrue(WirelessAdbFix.changeLimit(true, 33, shell::execute).confirmed)
+        assertTrue(WirelessAdbFix.changeLimit(true, 33, shell = shell::execute).confirmed)
         assertTrue(shell.commands.containsAll(listOf(globalOn, deviceConfigOn)))
         assertFalse(shell.commands.any { "set_sync_disabled_for_tests" in it })
     }
@@ -328,7 +456,7 @@ class WirelessAdbFixTest {
                 maxPhantom = WirelessAdbFix.ShellResult(0, " \n"),
             )
 
-            val result = WirelessAdbFix.changeLimit(true, sdk, shell::execute)
+            val result = WirelessAdbFix.changeLimit(true, sdk, shell = shell::execute)
 
             assertFalse("SDK $sdk", result.confirmed)
             assertFalse("SDK $sdk", result.readings.deviceConfigReadable)
@@ -343,7 +471,7 @@ class WirelessAdbFixTest {
                 maxPhantom = WirelessAdbFix.ShellResult(0, "", "Permission denied"),
             )
 
-            val result = WirelessAdbFix.changeLimit(true, sdk, shell::execute)
+            val result = WirelessAdbFix.changeLimit(true, sdk, shell = shell::execute)
 
             assertFalse("SDK $sdk", result.confirmed)
             assertTrue(result.diagnostics.contains("Permission denied"))
@@ -357,7 +485,7 @@ class WirelessAdbFixTest {
             override = WirelessAdbFix.ShellResult(0, "false"),
         )
 
-        val result = WirelessAdbFix.changeLimit(false, 33, shell::execute)
+        val result = WirelessAdbFix.changeLimit(false, 33, shell = shell::execute)
 
         assertFalse(result.confirmed)
         assertFalse(result.readings.globalReadable)
@@ -367,7 +495,7 @@ class WirelessAdbFixTest {
     fun emptyMaxIsNotReadableAndDoesNotConfirmDisabledState() {
         val shell = Shell(maxPhantom = WirelessAdbFix.ShellResult(0, ""))
 
-        val result = WirelessAdbFix.changeLimit(false, 31, shell::execute)
+        val result = WirelessAdbFix.changeLimit(false, 31, shell = shell::execute)
 
         assertFalse(result.confirmed)
         assertFalse(result.readings.deviceConfigReadable)
@@ -381,7 +509,7 @@ class WirelessAdbFixTest {
             deviceConfigOff to WirelessAdbFix.ShellResult(1, "", "DeviceConfig write failed"),
         ))
 
-        val result = WirelessAdbFix.changeLimit(false, 33, shell::execute)
+        val result = WirelessAdbFix.changeLimit(false, 33, shell = shell::execute)
 
         assertFalse(result.confirmed)
         assertTrue(result.diagnostics.contains("Global write failed"))

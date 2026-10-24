@@ -1774,6 +1774,13 @@
     <string name="adbfix_no_pairing">No Wireless debugging pairing is saved</string>
     <string name="adbfix_enter_address">Enter the current Wireless debugging IP address &amp; Port</string>
     <string name="adbfix_local_only">Use this device\'s Wireless debugging address. Another device cannot verify this device\'s child-process limit.</string>
+    <string name="adbfix_legacy_sync_title">Restore settings changed by older DroidDeck?</string>
+    <string name="adbfix_legacy_sync_message">An older Android 12 repair may have disabled system configuration updates (DeviceConfig) across this device. Continuing may re-enable these updates as well as restore child-process limits. DroidDeck cannot tell whether another tool changed this policy later. Continue only if you also want configuration updates restored. A device restart may be needed.</string>
+    <string name="adbfix_legacy_sync_restore">Restore limits and configuration updates</string>
+    <string name="adbfix_legacy_sync_retry">Restore older settings</string>
+    <string name="adbfix_legacy_sync_cancelled">Restoration cancelled.</string>
+    <string name="adbfix_legacy_sync_confirmation_required">Confirm restoration of the older system configuration sync setting before continuing.</string>
+    <string name="adbfix_legacy_sync_not_confirmed">Child-process limits were restored, but the older system configuration sync setting could not be verified. Retry restoration. %1$s</string>
 
     <string name="adbpair_timed_out">Timed out waiting for the pairing pop-up. Try again from DroidDeck.</string>
     <string name="adbpair_discovery_failed_code">Could not look for the pairing pop-up (%1$d). Check that Wi-Fi is on.</string>

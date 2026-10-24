@@ -37,7 +37,13 @@ object WirelessAdbFix {
         val diagnostics: String,
     )
 
-    internal data class LimitChangeResult(val readings: LimitReadResult, val confirmed: Boolean, val diagnostics: String)
+    internal data class LimitChangeResult(
+        val readings: LimitReadResult,
+        val confirmed: Boolean,
+        val diagnostics: String,
+        val legacySyncRecovered: Boolean = false,
+        val legacySyncFailure: Boolean = false,
+    )
 
     private fun runShell(shell: (String) -> ShellResult, command: String): ShellResult = try {
         shell(command)
@@ -72,8 +78,11 @@ object WirelessAdbFix {
     internal fun changeLimit(
         enabled: Boolean,
         sdk: Int,
+        legacySyncPending: Boolean = false,
+        recoverLegacySync: Boolean = false,
         shell: (String) -> ShellResult,
     ): LimitChangeResult {
+        check(!enabled || !legacySyncPending || recoverLegacySync) { "Legacy DeviceConfig sync recovery requires confirmation" }
         val changes = PhantomProcessLimit.shellCommands(enabled, sdk).map { it to runShell(shell, it) }
         val readings = readLimit(shell)
         val diagnostics = buildList {
@@ -82,7 +91,7 @@ object WirelessAdbFix {
             }
             add(readings.diagnostics)
         }.joinToString("\n")
-        return LimitChangeResult(
+        val normal = LimitChangeResult(
             readings,
             PhantomProcessLimit.verificationMatches(
                 readings.global,
@@ -95,6 +104,14 @@ object WirelessAdbFix {
                 readings.overrideReadable,
             ),
             diagnostics,
+        )
+        if (!enabled || !legacySyncPending || !normal.confirmed) return normal
+        val recovery = LegacyDeviceConfigSync.recover(shell)
+        return normal.copy(
+            confirmed = recovery.confirmed,
+            diagnostics = "$diagnostics\n${recovery.diagnostics}",
+            legacySyncRecovered = recovery.confirmed,
+            legacySyncFailure = !recovery.confirmed,
         )
     }
 
@@ -269,28 +286,41 @@ object WirelessAdbFix {
     }
 
     @Synchronized
-    fun setChildProcessLimit(context: Context, host: String, port: Int, enabled: Boolean) {
+    fun setChildProcessLimit(context: Context, host: String, port: Int, enabled: Boolean, recoverLegacySync: Boolean = false) {
+        PhantomProcessLimit.clearVerification()
+        val legacySyncPending = requireLegacySyncConsent(context, enabled, recoverLegacySync)
         usingLocalHost(host, { context.getString(R.string.adbfix_local_only) }) { localHost ->
             loadOrCreateIdentity(context.applicationContext)
-            val readings = Kadb.create(localHost, port).use { adb ->
-                val result = changeLimit(enabled, Build.VERSION.SDK_INT) { command ->
+            val result = Kadb.create(localHost, port).use { adb ->
+                val result = changeLimit(enabled, Build.VERSION.SDK_INT, legacySyncPending, recoverLegacySync) { command ->
                     val response = adb.shell(command)
                     ShellResult(response.exitCode, response.output, response.allOutput)
                 }
                 check(result.confirmed) {
-                    context.getString(R.string.adbfix_not_confirmed, result.diagnostics)
+                    context.getString(
+                        if (result.legacySyncFailure) R.string.adbfix_legacy_sync_not_confirmed else R.string.adbfix_not_confirmed,
+                        result.diagnostics,
+                    )
                 }
-                result.readings
+                result
             }
             saveConnection(context, host, port)
-            rememberVerification(context, readings)
+            if (result.legacySyncRecovered) LegacyDeviceConfigSync.clear(context)
+            rememberVerification(context, result.readings)
         }
     }
 
     @Synchronized
-    fun setUsingSavedPairing(context: Context, enabled: Boolean) {
+    fun setUsingSavedPairing(context: Context, enabled: Boolean, recoverLegacySync: Boolean = false) {
         PhantomProcessLimit.clearVerification()
-        usingSavedConnection(context) { host, port -> setChildProcessLimit(context, host, port, enabled) }
+        requireLegacySyncConsent(context, enabled, recoverLegacySync)
+        usingSavedConnection(context) { host, port -> setChildProcessLimit(context, host, port, enabled, recoverLegacySync) }
+    }
+
+    private fun requireLegacySyncConsent(context: Context, enabled: Boolean, recoverLegacySync: Boolean): Boolean {
+        val pending = LegacyDeviceConfigSync.pending(context)
+        check(!enabled || !pending || recoverLegacySync) { context.getString(R.string.adbfix_legacy_sync_confirmation_required) }
+        return pending
     }
 
     @Synchronized
