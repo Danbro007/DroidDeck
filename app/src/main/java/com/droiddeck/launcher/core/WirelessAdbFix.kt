@@ -25,6 +25,8 @@ object WirelessAdbFix {
 
     private data class SavedConnection(val host: String, val port: Int?)
 
+    internal class LegacySyncRecoveryException(message: String) : IllegalStateException(message)
+
     internal data class ShellResult(val exitCode: Int, val output: String, val allOutput: String = output)
 
     internal data class LimitReadResult(
@@ -296,11 +298,13 @@ object WirelessAdbFix {
                     val response = adb.shell(command)
                     ShellResult(response.exitCode, response.output, response.allOutput)
                 }
-                check(result.confirmed) {
-                    context.getString(
+                if (!result.confirmed) {
+                    val message = context.getString(
                         if (result.legacySyncFailure) R.string.adbfix_legacy_sync_not_confirmed else R.string.adbfix_not_confirmed,
                         result.diagnostics,
                     )
+                    if (result.legacySyncFailure) throw LegacySyncRecoveryException(message)
+                    throw IllegalStateException(message)
                 }
                 result
             }

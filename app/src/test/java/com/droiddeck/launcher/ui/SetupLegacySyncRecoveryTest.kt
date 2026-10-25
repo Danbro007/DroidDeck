@@ -91,6 +91,42 @@ class SetupLegacySyncRecoveryTest {
         retry().assertDoesNotExist()
     }
 
+    @Test
+    fun syncRecoveryFailureShowsDiagnosticAndAllowsRetryWithoutPairing() {
+        markLegacyRepair()
+        show(PhantomProcessStatus.ENABLED)
+        openLimitDetails()
+        retry().performScrollTo().performClick()
+        val diagnostic = context.getString(R.string.adbfix_legacy_sync_not_confirmed, "Permission denied")
+
+        compose.runOnIdle {
+            completions.removeFirst()("droiddeck:legacy-sync-recovery-failed:$diagnostic")
+            assertEquals(0, wirelessRequests)
+        }
+
+        compose.onNodeWithText(diagnostic).assertExists()
+        retry().assertIsEnabled().performScrollTo().performClick()
+        compose.runOnIdle {
+            assertEquals(listOf(true, true), requests)
+            completions.removeFirst()(LegacySyncRecoveryDialog.CANCELLED)
+        }
+    }
+
+    @Test
+    fun connectionFailureStillOpensWirelessDebugging() {
+        markLegacyRepair()
+        show(PhantomProcessStatus.ENABLED)
+        openLimitDetails()
+        retry().performScrollTo().performClick()
+
+        compose.runOnIdle {
+            completions.removeFirst()("Connection refused")
+            assertEquals(1, wirelessRequests)
+        }
+
+        compose.onNodeWithText(text(R.string.setup_limit_adb_failed)).assertExists()
+    }
+
     private fun assertRetryAvailable(status: PhantomProcessStatus) {
         markLegacyRepair()
         show(status)

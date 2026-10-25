@@ -152,7 +152,7 @@ internal fun SetupPanel(
             processLimitBusy = false
             if (error == null) {
                 a.onRefreshPhantomStatus()
-            } else if (error == LegacySyncRecoveryDialog.CANCELLED) {
+            } else if (error == LegacySyncRecoveryDialog.CANCELLED || LegacySyncRecoveryDialog.isRecoveryFailure(error)) {
                 processLimitMessage = LegacySyncRecoveryDialog.displayError(ctx, error)
             } else {
                 processLimitMessage = ctx.getString(R.string.setup_limit_adb_failed)

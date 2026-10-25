@@ -6,10 +6,13 @@ import android.app.Application
 import android.content.Context
 import android.os.Looper
 import com.droiddeck.launcher.R
+import com.droiddeck.launcher.core.WirelessAdbFix
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -126,5 +129,25 @@ class LegacySyncRecoveryDialogTest {
             LegacySyncRecoveryDialog.displayError(activity, LegacySyncRecoveryDialog.CANCELLED),
         )
         assertEquals("Connection failed", LegacySyncRecoveryDialog.displayError(activity, "Connection failed"))
+    }
+
+    @Test
+    fun typedRecoveryFailureSurvivesTheStringCallbackAndDisplaysOnlyTheDiagnostic() {
+        val message = activity.getString(R.string.adbfix_legacy_sync_not_confirmed, "Permission denied")
+        val error = LegacySyncRecoveryDialog.failureMessage(WirelessAdbFix.LegacySyncRecoveryException(message), "Fallback")
+
+        assertEquals("droiddeck:legacy-sync-recovery-failed:$message", error)
+        assertTrue(LegacySyncRecoveryDialog.isRecoveryFailure(error))
+        assertEquals(message, LegacySyncRecoveryDialog.displayError(activity, error))
+    }
+
+    @Test
+    fun ordinaryFailureKeepsConnectionFallbackAndUsesFallbackWhenMessageIsMissing() {
+        val error = LegacySyncRecoveryDialog.failureMessage(IllegalStateException("Connection refused"), "Fallback")
+
+        assertEquals("Connection refused", error)
+        assertFalse(LegacySyncRecoveryDialog.isRecoveryFailure(error))
+        assertEquals(error, LegacySyncRecoveryDialog.displayError(activity, error))
+        assertEquals("Fallback", LegacySyncRecoveryDialog.failureMessage(IllegalStateException(), "Fallback"))
     }
 }

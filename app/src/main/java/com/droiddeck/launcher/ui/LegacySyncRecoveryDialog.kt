@@ -5,12 +5,24 @@ import android.app.AlertDialog
 import android.content.Context
 import com.droiddeck.launcher.R
 import com.droiddeck.launcher.core.LegacyDeviceConfigSync
+import com.droiddeck.launcher.core.WirelessAdbFix
 
 internal object LegacySyncRecoveryDialog {
     const val CANCELLED = "droiddeck:legacy-sync-recovery-cancelled"
+    private const val RECOVERY_FAILED = "droiddeck:legacy-sync-recovery-failed:"
 
-    fun displayError(context: Context, error: String): String =
-        if (error == CANCELLED) context.getString(R.string.adbfix_legacy_sync_cancelled) else error
+    fun failureMessage(failure: Throwable, fallback: String): String {
+        val message = failure.localizedMessage ?: fallback
+        return if (failure is WirelessAdbFix.LegacySyncRecoveryException) RECOVERY_FAILED + message else message
+    }
+
+    fun isRecoveryFailure(error: String): Boolean = error.startsWith(RECOVERY_FAILED)
+
+    fun displayError(context: Context, error: String): String = when {
+        error == CANCELLED -> context.getString(R.string.adbfix_legacy_sync_cancelled)
+        isRecoveryFailure(error) -> error.removePrefix(RECOVERY_FAILED)
+        else -> error
+    }
 
     fun request(
         activity: Activity,

@@ -1058,7 +1058,9 @@ class FrontEndActivity : ComponentActivity() {
                                     val result = runCatching {
                                         WirelessAdbFix.setChildProcessLimit(this@FrontEndActivity, host, port, enabled, recoverLegacySync)
                                     }
-                                    val error = result.exceptionOrNull()?.let { it.localizedMessage ?: getString(R.string.main_wadb_command_failed) }
+                                    val error = result.exceptionOrNull()?.let {
+                                        com.droiddeck.launcher.ui.LegacySyncRecoveryDialog.failureMessage(it, getString(R.string.main_wadb_command_failed))
+                                    }
                                     ui.post {
                                         if (error == null) refreshPhantomStatus()
                                         complete(error)
@@ -1074,7 +1076,9 @@ class FrontEndActivity : ComponentActivity() {
                                     val result = runCatching {
                                         WirelessAdbFix.setUsingSavedPairing(this@FrontEndActivity, enabled, recoverLegacySync)
                                     }
-                                    val error = result.exceptionOrNull()?.let { it.localizedMessage ?: getString(R.string.main_wadb_unavailable) }
+                                    val error = result.exceptionOrNull()?.let {
+                                        com.droiddeck.launcher.ui.LegacySyncRecoveryDialog.failureMessage(it, getString(R.string.main_wadb_unavailable))
+                                    }
                                     ui.post {
                                         if (error == null) refreshPhantomStatus()
                                         complete(error)
