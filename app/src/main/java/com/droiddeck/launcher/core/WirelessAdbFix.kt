@@ -198,7 +198,7 @@ object WirelessAdbFix {
         errorMessage: () -> String,
         resolve: (String) -> InetAddress = { InetAddress.getByName(it) },
         localAddress: (InetAddress) -> Boolean = ::isLocalAddress,
-        clearVerification: () -> Unit = PhantomProcessLimit::clearVerification,
+        clearVerification: () -> Unit = {},
         action: (String) -> T,
     ): T {
         clearVerification()

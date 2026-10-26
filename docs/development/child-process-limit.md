@@ -36,8 +36,11 @@ A verified shell snapshot bridges only the otherwise unreadable DeviceConfig
 count. Global flags and their property override always use current app reads.
 The snapshot is held only in the current app process for at most 60 seconds.
 Its SDK, build fingerprint, and app-visible settings must still match.
-A new verification clears the previous snapshot; failures cannot reuse an earlier
-success. The old persistent Android 12 acknowledgement is no longer trusted.
+A new verification or child-process limit change clears the previous snapshot;
+failed verification cannot reuse an earlier success. Unrelated cached-app cleanup
+and background-app limit shell commands preserve the snapshot, subject to the same
+expiry and current-setting checks. The old persistent Android 12 acknowledgement
+is no longer trusted.
 
 When a saved pairing exists and a local check blocks Steam, the launcher retries
 a read-only shell check off the UI thread, at most once every 30 seconds. On ROMs
