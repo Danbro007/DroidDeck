@@ -359,6 +359,29 @@ object WirelessAdbFix {
         }
     }
 
+    fun hasSavedPairing(context: Context): Boolean = savedConnection(context.applicationContext) != null
+
+    fun clearCachedApps(context: Context) {
+        shell(context, "am kill-all")
+    }
+
+    @Synchronized
+    fun shell(context: Context, command: String): String {
+        val appContext = context.applicationContext
+        return usingSavedConnection(appContext) { host, port ->
+            usingLocalHost(host, { appContext.getString(R.string.adbfix_local_only) }) { localHost ->
+                loadOrCreateIdentity(appContext)
+                val output = Kadb.create(localHost, port).use { adb ->
+                    val result = adb.shell(command)
+                    check(result.exitCode == 0) { result.allOutput.ifBlank { appContext.getString(R.string.adbfix_command_failed, result.exitCode) } }
+                    result.output
+                }
+                saveConnection(appContext, host, port)
+                output
+            }
+        }
+    }
+
     private fun <T> usingSavedConnection(context: Context, action: (String, Int) -> T): T {
         val appContext = context.applicationContext
         val saved = savedConnection(appContext)
