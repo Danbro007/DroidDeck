@@ -38,6 +38,9 @@ object SessionState {
     var installing: String? = null
 
     @Volatile
+    var installCancellation: com.droiddeck.launcher.core.Downloader.Cancellation? = null
+
+    @Volatile
     var stopRequested = false
 
     @Volatile
@@ -53,6 +56,7 @@ object SessionState {
     var resuming by mutableStateOf(false)
     var resumeFailures by mutableIntStateOf(0)
     var resumeFailed by mutableStateOf(false)
+    var manualPause by mutableStateOf(false)
     @Volatile var pipActive = false
     @Volatile
     var program: String? = null
@@ -87,6 +91,7 @@ object SessionState {
 
     @Volatile var secondScreenMode = com.droiddeck.launcher.input.SecondScreenMode.NONE
     @Volatile var secondScreenDisplay = -1
+    @Volatile var secondScreenAutoOpened = false
 
     @Volatile
     var mode = "steam"
@@ -102,12 +107,6 @@ object SessionState {
 
     @Volatile
     var upscaleRatio: Float = 0f
-
-    @Volatile
-    var fpsLimit: Int = 0
-
-    @Volatile
-    var performanceMode = false
 
     @Volatile
     var firstFrameSeen = false

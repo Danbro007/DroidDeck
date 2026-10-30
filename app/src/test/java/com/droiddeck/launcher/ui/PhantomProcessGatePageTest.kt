@@ -52,6 +52,7 @@ class PhantomProcessGatePageTest {
                     FocusGlideHost {
                         PhantomProcessGatePage(
                             status = PhantomProcessStatus.UNREADABLE,
+                            applyingSavedPairing = false,
                             onDismiss = {}, onOpenDeveloperOptions = {},
                             onFixWithWirelessDebugging = { wirelessRequests++ },
                             onEnterAddressManually = {}, onCopyCommand = {}, onOpenNotificationSettings = {},

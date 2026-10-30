@@ -3,7 +3,6 @@ package com.droiddeck.launcher.core
 import android.content.Context
 import android.os.Build
 import android.os.SystemClock
-import android.provider.Settings
 import com.droiddeck.launcher.R
 
 enum class PhantomProcessStatus {
@@ -122,7 +121,7 @@ object PhantomProcessLimit {
     }
 
     private fun readSettings(context: Context): Readings {
-        val global = runCatching { Settings.Global.getString(context.contentResolver, SETTING) }
+        val global = runCatching { GlobalSettings.read(context, SETTING) }
         val override = runCatching { systemProperty(OVERRIDE_PROPERTY) }
         val maximum = runCatching {
             Class.forName("android.provider.DeviceConfig")

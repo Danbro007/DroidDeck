@@ -29,6 +29,7 @@ class SetupLegacySyncRecoveryTest {
     private val requests = mutableListOf<Boolean>()
     private val completions = ArrayDeque<(String?) -> Unit>()
     private var wirelessRequests = 0
+    private var gateRequests = 0
 
     @Before
     fun setUp() {
@@ -71,9 +72,11 @@ class SetupLegacySyncRecoveryTest {
     @Test
     fun noLegacyMarkerDoesNotOfferOlderSettingsRestore() {
         show(PhantomProcessStatus.ENABLED)
-        openLimitDetails()
 
+        compose.onNodeWithText(text(R.string.setup_details)).assertDoesNotExist()
         retry().assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.setup_fix_it)).performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, gateRequests) }
     }
 
     @Test
@@ -148,7 +151,7 @@ class SetupLegacySyncRecoveryTest {
     private fun retry() = compose.onNodeWithText(text(R.string.adbfix_legacy_sync_retry))
 
     private fun openLimitDetails() {
-        compose.onNodeWithText(text(R.string.setup_fix_it)).performScrollTo().performClick()
+        compose.onNodeWithText(text(R.string.setup_details)).performScrollTo().performClick()
     }
 
     private fun show(status: PhantomProcessStatus) {
@@ -169,7 +172,8 @@ class SetupLegacySyncRecoveryTest {
                             onRoms = {}, onFiles = {}, onLogs = {}, onOffline = {},
                             onWirelessAdbPair = { _, _, _, _ -> }, onWirelessAdbApply = { _, _, _, _ -> },
                             onSetPhantomProcessLimit = { enabled, done -> requests += enabled; completions.addLast(done) },
-                        ), onOpenDeveloperOptions = {}, onRequestWirelessAdb = { wirelessRequests++ })
+                            onShowPhantomGate = { gateRequests++ },
+                        ), onOpenDeveloperOptions = {}, onRequestWirelessAdb = { wirelessRequests++ }, onPairWirelessDebugging = {})
                     }
                 }
             }
